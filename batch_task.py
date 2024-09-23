@@ -94,7 +94,6 @@ def create_batch_job(file_id: str) -> str:
     print(batch_response.model_dump_json(indent=2))
     return batch_response.id
 
-
 def upload_and_create_job(csv_file_path: str, prompt: str) -> str:
     file_id = upload_file(csv_file_path, prompt)
     status = "pending"
