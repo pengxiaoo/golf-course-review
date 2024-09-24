@@ -1,7 +1,6 @@
 import os
 import time
 import datetime
-import json
 import pandas as pd
 import json
 from dotenv import load_dotenv
@@ -19,13 +18,13 @@ client = AzureOpenAI(
     azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
 )
 
-text_col_num=5
-encoding_used='utf-8'
-batch_endpoint="/chat/completions"
-input_data="input_data/golf_course_reviews.csv"
-output_data="output_data/result.jsonl"
-output_result="output_data/result.csv"
-final_output_result="output_data/final_result.csv"
+text_col_num = 5
+encoding_used = 'utf-8'
+batch_endpoint = "/chat/completions"
+input_data = "input_data/golf_course_reviews.csv"
+output_data = "output_data/result.jsonl"
+output_result = "output_data/result.csv"
+final_output_result = "output_data/final_result.csv"
 
 
 def convert_csv_to_jsonl(csv_file_path: str, prompt: str) -> str:
@@ -41,10 +40,8 @@ def convert_csv_to_jsonl(csv_file_path: str, prompt: str) -> str:
             df = pd.read_csv(csv_file_path, encoding='windows-1252')
         except UnicodeDecodeError as e:
             print(f"Failed to read CSV file: {e}")
-            return
 
     text_col = df.columns[text_col_num - 1]
-    seen = set()  # Set to keep track of unique entries
     jsonl_output = []
     for idx, row in df.iterrows():
         # Prepare the main text
@@ -59,11 +56,7 @@ def convert_csv_to_jsonl(csv_file_path: str, prompt: str) -> str:
             }
         # Serialize the JSON object to a string
         json_str = json.dumps(json_obj)
-
-        # Check for duplication
-        if json_str not in seen:
-            seen.add(json_str)
-            jsonl_output.append(json_str)
+        jsonl_output.append(json_str)
 
     # Write to JSONL file
     output_file_path = csv_file_path.replace('.csv', '.jsonl')
@@ -71,7 +64,6 @@ def convert_csv_to_jsonl(csv_file_path: str, prompt: str) -> str:
         for item in jsonl_output:
             file.write(item + '\n')
     return output_file_path
-
 
 
 def upload_file(csv_file_path: str, prompt: str) -> str:
@@ -93,6 +85,7 @@ def create_batch_job(file_id: str) -> str:
     )
     print(batch_response.model_dump_json(indent=2))
     return batch_response.id
+
 
 def upload_and_create_job(csv_file_path: str, prompt: str) -> str:
     file_id = upload_file(csv_file_path, prompt)
@@ -157,7 +150,7 @@ def save_job_result(output_file_id) -> str:
                 try:
                     writer.writerow([custom_id, content])
                 except Exception as e:
-                    print(custom_id, "=========",content)
+                    print(custom_id, "=========", content)
                     writer.writerow([custom_id, "Neutral"])
         print(f"Data has been exported to {csv_file}")
     else:
@@ -173,7 +166,8 @@ def join_results_with_original_data(csv_file_path: str, result_file_path: str):
     df2 = df2[columns]
 
     df3 = pd.merge(df2, df1, on="id")
-    df3.to_csv(final_output_result, encoding='utf-8', index=False, quoting=csv.QUOTE_ALL)
+    df = df3.drop(['id'], axis=1)
+    df.to_csv(final_output_result, encoding='utf-8', index=False, quoting=csv.QUOTE_ALL)
     pass
 
 
