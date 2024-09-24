@@ -1,3 +1,4 @@
 .env
 input_data/*
 output_data/*
+.idea/*
