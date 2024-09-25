@@ -47,9 +47,11 @@ class BatchTask:
     def get_prompt(self) -> str:
         if self.task_type == BatchTaskType.SENTIMENT:
             return """
-                Please classify the sentiment of this text as either "positive" or "negative" or "neutral". 
-                Translate non-English content before answering. Respond with one word only.
-                The text is:
+                The following is a review of a golf course from a golfer who had played there.
+                Please classify the sentiment of this review as either "positive" or "negative" or "neutral". 
+                Translate non-English content before answering, ignore unicodes and unrecognized words. 
+                Respond with one word only.
+                The review text is:
             """
         elif self.task_type == BatchTaskType.SUMMARIZATION:
             # todo: optimize this
