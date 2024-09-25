@@ -12,7 +12,8 @@ from openai import AzureOpenAI
 class BatchTaskType(str, Enum):
     SENTIMENT = "sentiment"
     # todo: in order to do summarization, we need to transform the input data:
-    #  group by club_id+course_id, pick the latest 20 comments, concatenate them, and save as a new csv file
+    #  group by club_id+course_id, pick the latest 20 comments, concatenate them,
+    #  and save as a new csv or json file as input of the summarization task
     SUMMARIZATION = "summarization"
 
 
@@ -54,10 +55,11 @@ class BatchTask:
                 The review text is:
             """
         elif self.task_type == BatchTaskType.SUMMARIZATION:
-            # todo: optimize this
             return """
-                Please summarize the following text. Respond with a few sentences.
-                The text is:
+                The following are reviews of a golf course from multiple golfers who had played there recently.
+                Please summarize the reviews into a single paragraph, in 40~80 words, 
+                so that new golfers can quickly know about the golf course.
+                The text of the reviews is:
             """
         else:
             raise ValueError(f"Unsupported task type: {self.task_type}")
