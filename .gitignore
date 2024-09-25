@@ -2,3 +2,6 @@
 input_data/*
 output_data/*
 .idea/*
+*.pyc
+.DS_Store
+__pycache__/
