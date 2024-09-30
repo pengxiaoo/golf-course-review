@@ -37,6 +37,7 @@ class BatchTask:
         self.encoding_used = encoding_used
         self.comment_col_name = comment_col_name
         self.batch_id = None
+        self.tail_number = 20
         # use constants defined in .env file
         load_dotenv()
         self.client = AzureOpenAI(
@@ -58,7 +59,8 @@ class BatchTask:
             return """
                 The following are reviews of a golf course from multiple golfers who had played there recently.
                 Please summarize the reviews into a single paragraph, in 40~80 words, 
-                so that new golfers can quickly know about the golf course.
+                so that new golfers can quickly know about the golf course. 
+                Translate non-English content before answering, ignore unicodes and unrecognized words.
                 The text of the reviews is:
             """
         else:
@@ -69,8 +71,11 @@ class BatchTask:
         self.batch_id = self.upload_and_create_job()
         if self.batch_id is not None:
             llm_success = self.track_and_save_job_result()
-            if llm_success:
+            if llm_success and self.task_type == BatchTaskType.SENTIMENT:
                 self.join_results_with_original_data()
+            # TODO with summarization Task
+            elif self.task_type == BatchTaskType.SUMMARIZATION:
+                a = 1
 
     def upload_and_create_job(self):
         file_id = self.upload_file()
@@ -83,6 +88,30 @@ class BatchTask:
             status = file_response.status
             print(f"{datetime.datetime.now()} File Id: {file_id}, Status: {status}")
         return self.create_batch_job(file_id)
+
+    def get_dataframe_summarization(self):
+        csv_file_path = self.input_data_path
+        df = pd.read_csv(csv_file_path)
+        df['club_course_id'] = df['club_id'].astype(str) + '_' + df['course_id'].astype(str)
+        df = df.sort_values(by=["comment_time"], ascending=False)
+        grouped = df.groupby('club_course_id')
+        result = []
+        for group_name, group_df in grouped:
+            # Pick the lastest 20 comments and concatenate them
+            latest_comments = ". ".join(group_df[self.comment_col_name].tail(self.tail_number))
+            # Split the 'club_course_id' back to club_id and course_id
+            club_id, course_id = group_name.split('_')
+            # Add the result to the list
+            result.append({
+                'club_id': club_id,
+                'course_id': course_id,
+                'comment': latest_comments
+            })
+
+        result_df = pd.DataFrame(result)
+        concatenated_file_path = csv_file_path.replace(".csv", "_concatenated.csv")
+        result_df.to_csv(concatenated_file_path, index=False, quoting=csv.QUOTE_ALL)
+        return result_df
 
     def upload_file(self):
         jsonl_file_path = self.convert_csv_to_jsonl()
@@ -97,7 +126,10 @@ class BatchTask:
     def convert_csv_to_jsonl(self):
         csv_file_path = self.input_data_path
         try:
-            df = pd.read_csv(csv_file_path, encoding=self.encoding_used)
+            if self.task_type == BatchTaskType.SUMMARIZATION:
+                df = self.get_dataframe_summarization()
+            else:
+                df = pd.read_csv(csv_file_path, encoding=self.encoding_used)
         except UnicodeDecodeError:
             try:
                 df = pd.read_csv(csv_file_path, encoding="windows-1252")
@@ -125,7 +157,7 @@ class BatchTask:
             jsonl_output.append(json_str)
 
         # Write to JSONL file
-        output_file_path = csv_file_path.replace(".csv", ".jsonl")
+        output_file_path = f"input_data/result_{self.task_type}.jsonl"
         with open(output_file_path, "w") as file:
             for item in jsonl_output:
                 file.write(item + "\n")
