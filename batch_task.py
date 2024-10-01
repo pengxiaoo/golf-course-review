@@ -11,9 +11,6 @@ from openai import AzureOpenAI
 
 class BatchTaskType(str, Enum):
     SENTIMENT = "sentiment"
-    # todo: in order to do summarization, we need to transform the input data:
-    #  group by club_id+course_id, pick the latest 20 comments, concatenate them,
-    #  and save as a new csv or json file as input of the summarization task
     SUMMARIZATION = "summarization"
 
 
@@ -58,6 +55,7 @@ class BatchTask:
         elif self.task_type == BatchTaskType.SUMMARIZATION:
             return """
                 The following are reviews of a golf course from multiple golfers who had played there recently.
+                individual reviews are started with a new line.
                 Please summarize the reviews into a single paragraph, in 40~80 words, 
                 so that new golfers can quickly know about the golf course. 
                 Translate non-English content before answering, ignore unicodes and unrecognized words.
@@ -73,8 +71,8 @@ class BatchTask:
             llm_success = self.track_and_save_job_result()
             if llm_success and self.task_type == BatchTaskType.SENTIMENT:
                 self.join_results_with_original_data()
-            # TODO with summarization Task
             elif self.task_type == BatchTaskType.SUMMARIZATION:
+                # todo what this for?
                 a = 1
 
     def upload_and_create_job(self):
@@ -96,9 +94,8 @@ class BatchTask:
         grouped = df.groupby(['club_id', 'course_id'])
         result = []
         for group_name, group_df in grouped:
-            # Pick the lastest 20 comments and concatenate them
-            latest_comments = ". ".join(group_df[self.comment_col_name].tail(self.tail_number).astype(str))
-            # Split the 'club_course_id' back to club_id and course_id
+            # Pick the latest 20 comments and concatenate them
+            latest_comments = "\n".join(group_df[self.comment_col_name].tail(self.tail_number).astype(str))
             club_id, course_id = group_name
             result.append({
                 'club_id': club_id,
