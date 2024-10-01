@@ -92,16 +92,14 @@ class BatchTask:
     def get_dataframe_summarization(self):
         csv_file_path = self.input_data_path
         df = pd.read_csv(csv_file_path)
-        df['club_course_id'] = df['club_id'].astype(str) + '_' + df['course_id'].astype(str)
         df = df.sort_values(by=["comment_time"], ascending=False)
-        grouped = df.groupby('club_course_id')
+        grouped = df.groupby(['club_id', 'course_id'])
         result = []
         for group_name, group_df in grouped:
             # Pick the lastest 20 comments and concatenate them
-            latest_comments = ". ".join(group_df[self.comment_col_name].tail(self.tail_number))
+            latest_comments = ". ".join(group_df[self.comment_col_name].tail(self.tail_number).astype(str))
             # Split the 'club_course_id' back to club_id and course_id
-            club_id, course_id = group_name.split('_')
-            # Add the result to the list
+            club_id, course_id = group_name
             result.append({
                 'club_id': club_id,
                 'course_id': course_id,
@@ -205,7 +203,7 @@ class BatchTask:
             # Get the header from the keys of the first JSON object
             header = ["custom_id", "result"]
             # Open the CSV file for writing
-            with open(self.llm_result_data_path, "w", newline="", encoding=self.encoding_used) as csv_file:
+            with open(self.llm_result_data_path, "w", newline="", encoding=self.encoding_used, errors='ignore') as csv_file:
                 writer = csv.writer(csv_file, quoting=csv.QUOTE_ALL)
                 # Write the header to the CSV file
                 writer.writerow(header)
@@ -213,8 +211,8 @@ class BatchTask:
                 json_data = sorted(json_data, key=lambda x: int(x["custom_id"]))
                 for entry in json_data:
                     custom_id = entry.get("custom_id")
-                    result = entry["response"]["body"]["choices"][0]["message"]["content"].capitalize()
                     try:
+                        result = entry["response"]["body"]["choices"][0]["message"]["content"].capitalize()
                         writer.writerow([custom_id, result])
                     except Exception as e:
                         print(f"Error in save_job_result: {e}")
