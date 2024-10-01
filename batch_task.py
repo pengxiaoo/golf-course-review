@@ -26,6 +26,7 @@ class BatchTask:
                  ):
         self.task_type = task_type
         self.input_data_path = input_data_path
+        self.concatenated_data_path = input_data_path.replace('.csv','_concatenated.csv')
         time_str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         self.llm_result_data_path = f"output_data/llm_result_{task_type.value}_{time_str}.csv"
         self.join_result_data_path = f"output_data/join_result_{task_type.value}_{time_str}.csv"
@@ -72,8 +73,7 @@ class BatchTask:
             if llm_success and self.task_type == BatchTaskType.SENTIMENT:
                 self.join_results_with_original_data()
             elif self.task_type == BatchTaskType.SUMMARIZATION:
-                # todo what this for?
-                a = 1
+                self.join_result_with_concatenated_data()
 
     def upload_and_create_job(self):
         file_id = self.upload_file()
@@ -98,13 +98,12 @@ class BatchTask:
             latest_comments = "\n".join(group_df[self.comment_col_name].tail(self.tail_number).astype(str))
             club_id, course_id = group_name
             result.append({
-                'club_id': club_id,
-                'course_id': course_id,
+                'course_id': f"{course_id}-{club_id}",
                 'comment': latest_comments
             })
 
         result_df = pd.DataFrame(result)
-        concatenated_file_path = csv_file_path.replace(".csv", "_concatenated.csv")
+        concatenated_file_path = self.concatenated_data_path
         result_df.to_csv(concatenated_file_path, index=False, quoting=csv.QUOTE_ALL)
         return result_df
 
@@ -228,3 +227,12 @@ class BatchTask:
         df_merged = pd.merge(df_input_data, df_llm_result, on="custom_id") \
             .drop(["custom_id"], axis=1)
         df_merged.to_csv(self.join_result_data_path, encoding=self.encoding_used, index=False, quoting=csv.QUOTE_ALL)
+
+    def join_result_with_concatenated_data(self):
+        df_concatenated_reviews = pd.read_csv(self.concatenated_data_path)
+        df_concatenated_reviews["custom_id"] = range(0, len(df_concatenated_reviews))
+        df_llm_result = pd.read_csv(self.llm_result_data_path)
+        df_merged = pd.merge(df_concatenated_reviews, df_llm_result, on="custom_id") \
+            .drop(["custom_id"], axis=1)
+        df_merged.to_csv(self.join_result_data_path, encoding=self.encoding_used, index=False, quoting=csv.QUOTE_ALL)
+
