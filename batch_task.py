@@ -26,7 +26,7 @@ class BatchTask:
                  ):
         self.task_type = task_type
         self.input_data_path = input_data_path
-        self.concatenated_data_path = input_data_path.replace('.csv','_concatenated.csv')
+        self.concatenated_data_path = input_data_path.replace(".csv", "_concatenated.csv")
         time_str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         self.llm_result_data_path = f"output_data/llm_result_{task_type.value}_{time_str}.csv"
         self.join_result_data_path = f"output_data/join_result_{task_type.value}_{time_str}.csv"
@@ -91,21 +91,21 @@ class BatchTask:
         csv_file_path = self.input_data_path
         df = pd.read_csv(csv_file_path)
         df = df.sort_values(by=["comment_time"], ascending=False)
-        grouped = df.groupby(['club_id', 'course_id'])
-        result = []
+        grouped = df.groupby(["club_id", "course_id"])
+        requests = []
         for group_name, group_df in grouped:
             # Pick the latest 20 comments and concatenate them
             latest_comments = "\n".join(group_df[self.comment_col_name].tail(self.tail_number).astype(str))
             club_id, course_id = group_name
-            result.append({
-                'course_id': f"{course_id}-{club_id}",
-                'comment': latest_comments
+            requests.append({
+                "club_id": club_id,
+                "course_id": course_id,
+                self.comment_col_name: latest_comments
             })
 
-        result_df = pd.DataFrame(result)
-        concatenated_file_path = self.concatenated_data_path
-        result_df.to_csv(concatenated_file_path, index=False, quoting=csv.QUOTE_ALL)
-        return result_df
+        requests_df = pd.DataFrame(requests)
+        requests_df.to_csv(self.concatenated_data_path, index=False, quoting=csv.QUOTE_ALL)
+        return requests_df
 
     def upload_file(self):
         jsonl_file_path = self.convert_csv_to_jsonl()
@@ -151,7 +151,7 @@ class BatchTask:
             jsonl_output.append(json_str)
 
         # Write to JSONL file
-        output_file_path = f"input_data/result_{self.task_type}.jsonl"
+        output_file_path = f"input_data/requests_{self.task_type.value}.jsonl"
         with open(output_file_path, "w") as file:
             for item in jsonl_output:
                 file.write(item + "\n")
@@ -199,7 +199,8 @@ class BatchTask:
             # Get the header from the keys of the first JSON object
             header = ["custom_id", "result"]
             # Open the CSV file for writing
-            with open(self.llm_result_data_path, "w", newline="", encoding=self.encoding_used, errors='ignore') as csv_file:
+            with open(self.llm_result_data_path, "w", newline="", encoding=self.encoding_used,
+                      errors="ignore") as csv_file:
                 writer = csv.writer(csv_file, quoting=csv.QUOTE_ALL)
                 # Write the header to the CSV file
                 writer.writerow(header)
@@ -235,4 +236,3 @@ class BatchTask:
         df_merged = pd.merge(df_concatenated_reviews, df_llm_result, on="custom_id") \
             .drop(["custom_id"], axis=1)
         df_merged.to_csv(self.join_result_data_path, encoding=self.encoding_used, index=False, quoting=csv.QUOTE_ALL)
-
