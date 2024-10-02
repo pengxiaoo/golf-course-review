@@ -11,9 +11,6 @@ from openai import AzureOpenAI
 
 class BatchTaskType(str, Enum):
     SENTIMENT = "sentiment"
-    # todo: in order to do summarization, we need to transform the input data:
-    #  group by club_id+course_id, pick the latest 20 comments, concatenate them,
-    #  and save as a new csv or json file as input of the summarization task
     SUMMARIZATION = "summarization"
 
 
@@ -29,6 +26,7 @@ class BatchTask:
                  ):
         self.task_type = task_type
         self.input_data_path = input_data_path
+        self.concatenated_data_path = input_data_path.replace(".csv", "_concatenated.csv")
         time_str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         self.llm_result_data_path = f"output_data/llm_result_{task_type.value}_{time_str}.csv"
         self.join_result_data_path = f"output_data/join_result_{task_type.value}_{time_str}.csv"
@@ -37,6 +35,7 @@ class BatchTask:
         self.encoding_used = encoding_used
         self.comment_col_name = comment_col_name
         self.batch_id = None
+        self.tail_number = 20
         # use constants defined in .env file
         load_dotenv()
         self.client = AzureOpenAI(
@@ -57,8 +56,10 @@ class BatchTask:
         elif self.task_type == BatchTaskType.SUMMARIZATION:
             return """
                 The following are reviews of a golf course from multiple golfers who had played there recently.
+                individual reviews are started with a new line.
                 Please summarize the reviews into a single paragraph, in 40~80 words, 
-                so that new golfers can quickly know about the golf course.
+                so that new golfers can quickly know about the golf course. 
+                Translate non-English content before answering, ignore unicodes and unrecognized words.
                 The text of the reviews is:
             """
         else:
@@ -69,8 +70,10 @@ class BatchTask:
         self.batch_id = self.upload_and_create_job()
         if self.batch_id is not None:
             llm_success = self.track_and_save_job_result()
-            if llm_success:
+            if llm_success and self.task_type == BatchTaskType.SENTIMENT:
                 self.join_results_with_original_data()
+            elif self.task_type == BatchTaskType.SUMMARIZATION:
+                self.join_result_with_concatenated_data()
 
     def upload_and_create_job(self):
         file_id = self.upload_file()
@@ -83,6 +86,26 @@ class BatchTask:
             status = file_response.status
             print(f"{datetime.datetime.now()} File Id: {file_id}, Status: {status}")
         return self.create_batch_job(file_id)
+
+    def get_dataframe_summarization(self):
+        csv_file_path = self.input_data_path
+        df = pd.read_csv(csv_file_path)
+        df = df.sort_values(by=["comment_time"], ascending=False)
+        grouped = df.groupby(["club_id", "course_id"])
+        requests = []
+        for group_name, group_df in grouped:
+            # Pick the latest 20 comments and concatenate them
+            latest_comments = "\n".join(group_df[self.comment_col_name].tail(self.tail_number).astype(str))
+            club_id, course_id = group_name
+            requests.append({
+                "club_id": club_id,
+                "course_id": course_id,
+                self.comment_col_name: latest_comments
+            })
+
+        requests_df = pd.DataFrame(requests)
+        requests_df.to_csv(self.concatenated_data_path, index=False, quoting=csv.QUOTE_ALL)
+        return requests_df
 
     def upload_file(self):
         jsonl_file_path = self.convert_csv_to_jsonl()
@@ -97,7 +120,10 @@ class BatchTask:
     def convert_csv_to_jsonl(self):
         csv_file_path = self.input_data_path
         try:
-            df = pd.read_csv(csv_file_path, encoding=self.encoding_used)
+            if self.task_type == BatchTaskType.SUMMARIZATION:
+                df = self.get_dataframe_summarization()
+            else:
+                df = pd.read_csv(csv_file_path, encoding=self.encoding_used)
         except UnicodeDecodeError:
             try:
                 df = pd.read_csv(csv_file_path, encoding="windows-1252")
@@ -125,7 +151,7 @@ class BatchTask:
             jsonl_output.append(json_str)
 
         # Write to JSONL file
-        output_file_path = csv_file_path.replace(".csv", ".jsonl")
+        output_file_path = f"input_data/requests_{self.task_type.value}.jsonl"
         with open(output_file_path, "w") as file:
             for item in jsonl_output:
                 file.write(item + "\n")
@@ -173,7 +199,8 @@ class BatchTask:
             # Get the header from the keys of the first JSON object
             header = ["custom_id", "result"]
             # Open the CSV file for writing
-            with open(self.llm_result_data_path, "w", newline="", encoding=self.encoding_used) as csv_file:
+            with open(self.llm_result_data_path, "w", newline="", encoding=self.encoding_used,
+                      errors="ignore") as csv_file:
                 writer = csv.writer(csv_file, quoting=csv.QUOTE_ALL)
                 # Write the header to the CSV file
                 writer.writerow(header)
@@ -181,8 +208,8 @@ class BatchTask:
                 json_data = sorted(json_data, key=lambda x: int(x["custom_id"]))
                 for entry in json_data:
                     custom_id = entry.get("custom_id")
-                    result = entry["response"]["body"]["choices"][0]["message"]["content"].capitalize()
                     try:
+                        result = entry["response"]["body"]["choices"][0]["message"]["content"].capitalize()
                         writer.writerow([custom_id, result])
                     except Exception as e:
                         print(f"Error in save_job_result: {e}")
@@ -199,5 +226,13 @@ class BatchTask:
         df_input_data["custom_id"] = range(0, len(df_input_data))
         df_llm_result = pd.read_csv(self.llm_result_data_path)
         df_merged = pd.merge(df_input_data, df_llm_result, on="custom_id") \
+            .drop(["custom_id"], axis=1)
+        df_merged.to_csv(self.join_result_data_path, encoding=self.encoding_used, index=False, quoting=csv.QUOTE_ALL)
+
+    def join_result_with_concatenated_data(self):
+        df_concatenated_reviews = pd.read_csv(self.concatenated_data_path)
+        df_concatenated_reviews["custom_id"] = range(0, len(df_concatenated_reviews))
+        df_llm_result = pd.read_csv(self.llm_result_data_path)
+        df_merged = pd.merge(df_concatenated_reviews, df_llm_result, on="custom_id") \
             .drop(["custom_id"], axis=1)
         df_merged.to_csv(self.join_result_data_path, encoding=self.encoding_used, index=False, quoting=csv.QUOTE_ALL)
