@@ -12,6 +12,7 @@ from openai import AzureOpenAI
 class BatchTaskType(str, Enum):
     SENTIMENT = "sentiment"
     SUMMARIZATION = "summarization"
+    EXTRACTION = "extraction"
 
 
 class BatchTask:
@@ -62,6 +63,15 @@ class BatchTask:
                 Translate non-English content before answering, ignore unicodes and unrecognized words.
                 The text of the reviews is:
             """
+        elif self.task_type == BatchTaskType.EXTRACTION:
+            return """
+                The following are reviews of a golf course from multiple golfers who had played there recently.
+                individual reviews are started with a new line.
+                Please extract attribute the reviews in 3 words, 
+                so that new golfers can quickly know about the golf course. 
+                Translate non-English content before answering, ignore unicodes and unrecognized words.
+                The text of the reviews is:
+            """
         else:
             raise ValueError(f"Unsupported task type: {self.task_type}")
 
@@ -73,6 +83,8 @@ class BatchTask:
             if llm_success and self.task_type == BatchTaskType.SENTIMENT:
                 self.join_results_with_original_data()
             elif self.task_type == BatchTaskType.SUMMARIZATION:
+                self.join_result_with_concatenated_data()
+            elif self.task_type == BatchTaskType.EXTRACTION:
                 self.join_result_with_concatenated_data()
 
     def upload_and_create_job(self):
