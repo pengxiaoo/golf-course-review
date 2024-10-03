@@ -35,7 +35,7 @@ class BatchTask:
         self.encoding_used = encoding_used
         self.comment_col_name = comment_col_name
         self.batch_id = None
-        self.tail_number = 20
+        self.head_number = 20
         # use constants defined in .env file
         load_dotenv()
         self.client = AzureOpenAI(
@@ -90,19 +90,10 @@ class BatchTask:
     def get_dataframe_summarization(self):
         csv_file_path = self.input_data_path
         df = pd.read_csv(csv_file_path)
-        df = df.sort_values(by=["comment_time"], ascending=False)
-        grouped = df.groupby(["club_id", "course_id"])
-        requests = []
-        for group_name, group_df in grouped:
-            # Pick the latest 20 comments and concatenate them
-            latest_comments = "\n".join(group_df[self.comment_col_name].tail(self.tail_number).astype(str))
-            club_id, course_id = group_name
-            requests.append({
-                "club_id": club_id,
-                "course_id": course_id,
-                self.comment_col_name: latest_comments
-            })
-
+        df_sorted = df.sort_values(by=["comment_time"], ascending=False)
+        requests = (df_sorted.groupby(["course_id", "club_id"])["comment"]
+                    .apply(lambda x: "\n".join(x.head(self.head_number).fillna('')))
+                    .reset_index())
         requests_df = pd.DataFrame(requests)
         requests_df.to_csv(self.concatenated_data_path, index=False, quoting=csv.QUOTE_ALL)
         return requests_df
