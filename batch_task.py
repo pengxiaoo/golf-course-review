@@ -12,7 +12,7 @@ from openai import AzureOpenAI
 class BatchTaskType(str, Enum):
     SENTIMENT = "sentiment"
     SUMMARIZATION = "summarization"
-    EXTRACTION = "extraction"
+    EXTRACTION = "key_attributes_extraction"
 
 
 class BatchTask:
@@ -57,7 +57,7 @@ class BatchTask:
         elif self.task_type == BatchTaskType.SUMMARIZATION:
             return """
                 The following are reviews of a golf course from multiple golfers who had played there recently.
-                individual reviews are started with a new line.
+                individual review is started with a new line.
                 Please summarize the reviews into a single paragraph, in 40~80 words, 
                 so that new golfers can quickly know about the golf course. 
                 Translate non-English content before answering, ignore unicodes and unrecognized words.
@@ -66,8 +66,8 @@ class BatchTask:
         elif self.task_type == BatchTaskType.EXTRACTION:
             return """
                 The following are reviews of a golf course from multiple golfers who had played there recently.
-                individual reviews are started with a new line.
-                Please extract attribute the reviews in 3 words, 
+                individual review is started with a new line.
+                Please summarize the reviews into 1 to 3 short phrases, 
                 so that new golfers can quickly know about the golf course. 
                 Translate non-English content before answering, ignore unicodes and unrecognized words.
                 The text of the reviews is:
