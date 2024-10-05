@@ -12,6 +12,7 @@ from openai import AzureOpenAI
 class BatchTaskType(str, Enum):
     SENTIMENT = "sentiment"
     SUMMARIZATION = "summarization"
+    EXTRACTION = "key_attributes_extraction"
 
 
 class BatchTask:
@@ -56,8 +57,17 @@ class BatchTask:
         elif self.task_type == BatchTaskType.SUMMARIZATION:
             return """
                 The following are reviews of a golf course from multiple golfers who had played there recently.
-                individual reviews are started with a new line.
+                individual review is started with a new line.
                 Please summarize the reviews into a single paragraph, in 40~80 words, 
+                so that new golfers can quickly know about the golf course. 
+                Translate non-English content before answering, ignore unicodes and unrecognized words.
+                The text of the reviews is:
+            """
+        elif self.task_type == BatchTaskType.EXTRACTION:
+            return """
+                The following are reviews of a golf course from multiple golfers who had played there recently.
+                individual review is started with a new line.
+                Please summarize the reviews into 1 to 3 short phrases, 
                 so that new golfers can quickly know about the golf course. 
                 Translate non-English content before answering, ignore unicodes and unrecognized words.
                 The text of the reviews is:
@@ -73,6 +83,8 @@ class BatchTask:
             if llm_success and self.task_type == BatchTaskType.SENTIMENT:
                 self.join_results_with_original_data()
             elif self.task_type == BatchTaskType.SUMMARIZATION:
+                self.join_result_with_concatenated_data()
+            elif self.task_type == BatchTaskType.EXTRACTION:
                 self.join_result_with_concatenated_data()
 
     def upload_and_create_job(self):
