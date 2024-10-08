@@ -123,7 +123,7 @@ class BatchTask:
     def convert_csv_to_jsonl(self):
         csv_file_path = self.input_data_path
         try:
-            if self.task_type == BatchTaskType.SUMMARIZATION:
+            if self.task_type == BatchTaskType.SUMMARIZATION or self.task_type == BatchTaskType.EXTRACTION:
                 df = self.get_dataframe_summarization()
             else:
                 df = pd.read_csv(csv_file_path, encoding=self.encoding_used)
